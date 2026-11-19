@@ -316,11 +316,51 @@
 </footer>
 
 <script>
-  // Launch-list forms. Not yet connected to an email service:
-  // replace handleSignup's body with a call to your provider (e.g. ConvertKit, Mailchimp, beehiiv).
-  function handleSignup(email, note){
-    note.textContent = "Preview only: the launch list isn't connected to an email service yet, so this address was not saved.";
-    note.classList.add("show");
+  // Launch-list forms → Kit form 10213064
+  var KIT_ACTION = "https://app.kit.com/forms/10213064/subscriptions";
+  var SUCCESS_MSG = "You're on the list. Check your inbox to confirm your email.";
+
+  function postViaIframe(email){
+    var name = "kit-target";
+    var frame = document.getElementById(name);
+    if(!frame){
+      frame = document.createElement("iframe");
+      frame.name = name; frame.id = name; frame.style.display = "none";
+      document.body.appendChild(frame);
+    }
+    var f = document.createElement("form");
+    f.method = "POST"; f.action = KIT_ACTION; f.target = name; f.style.display = "none";
+    var i = document.createElement("input");
+    i.type = "hidden"; i.name = "email_address"; i.value = email;
+    f.appendChild(i); document.body.appendChild(f); f.submit();
+    setTimeout(function(){ f.remove(); }, 2000);
+  }
+
+  function handleSignup(email, note, form){
+    var btn = form.querySelector("button");
+    var label = btn.textContent;
+    btn.disabled = true; btn.textContent = "Joining…";
+    note.textContent = ""; note.classList.remove("show");
+
+    var done = function(ok, msg){
+      btn.disabled = false; btn.textContent = label;
+      note.textContent = msg; note.classList.add("show");
+      if(ok){ form.querySelector("input").value = ""; }
+    };
+
+    var data = new FormData();
+    data.append("email_address", email);
+    fetch(KIT_ACTION, { method:"POST", body:data, headers:{ "Accept":"application/json" } })
+      .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ return {ok:r.ok, j:j}; }); })
+      .then(function(res){
+        if(res.ok && (!res.j.status || res.j.status === "success")){ done(true, SUCCESS_MSG); }
+        else { done(false, "Something went wrong. Please check the address and try again."); }
+      })
+      .catch(function(){
+        // Cross-origin request blocked: fall back to a plain form post.
+        postViaIframe(email);
+        done(true, SUCCESS_MSG);
+      });
   }
   document.querySelectorAll("form.signup").forEach(function(form){
     form.addEventListener("submit", function(e){
@@ -334,7 +374,7 @@
         input.focus();
         return;
       }
-      handleSignup(v, note);
+      handleSignup(v, note, form);
     });
   });
 
